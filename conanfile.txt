@@ -1,0 +1,10 @@
+[requires]
+libpq/15.4
+libuuid/1.0.3
+libconfuse/3.3
+llhttp/8.1.0
+jansson/2.14
+
+[generators]
+CMakeDeps
+CMakeToolchain

@@ -1,0 +1,1 @@
+extern void uuid_util_generate_random(char *uuid);

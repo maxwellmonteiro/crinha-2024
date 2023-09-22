@@ -1,0 +1,9 @@
+{
+    "version": 4,
+    "vendor": {
+        "conan": {}
+    },
+    "include": [
+        "/home/maxwell/fontes/crinha/build/CMakePresets.json"
+    ]
+}
