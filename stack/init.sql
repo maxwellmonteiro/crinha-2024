@@ -1,13 +1,24 @@
-CREATE TABLE IF NOT EXISTS pessoa (
-    id uuid CONSTRAINT pk_pessoa PRIMARY KEY,
-    txt_apelido character varying(32) CONSTRAINT unq_pessoa UNIQUE,
-    dat_nascimento date NOT NULL,
-    txt_nome character varying(100) NOT NULL,
-    txt_stack character varying(300),
-    busca_trgm TEXT GENERATED ALWAYS AS (
-        LOWER(txt_nome || txt_apelido || txt_stack)
-    ) STORED
+drop table transacao;
+drop table cliente;
+
+create table cliente (
+    id integer constraint pk_cliente primary key,
+    limite bigint not null,
+    saldo bigint not null
 );
 
-CREATE EXTENSION PG_TRGM;
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pessoa_busca_tgrm ON PESSOA USING GIST (busca_trgm GIST_TRGM_OPS(SIGLEN=64));
+create table transacao (
+    id uuid constraint pk_transacao primary key,
+    id_cliente integer references cliente(id),
+    valor integer not null,
+    tipo char not null,
+    descricao character varying (10) not null,
+    realizada_em timestamp not null default current_timestamp
+);
+
+insert into cliente(id, limite, saldo) values(1, 100000, 0);
+insert into cliente(id, limite, saldo) values(2, 80000, 0);
+insert into cliente(id, limite, saldo) values(3, 1000000, 0);
+insert into cliente(id, limite, saldo) values(4, 10000000, 0);
+insert into cliente(id, limite, saldo) values(5, 500000, 0);
+

@@ -1,6 +1,6 @@
 #include "util/db_connection.h"
 #include "server/server.h"
-#include "controller/pessoa_controller.h"
+#include "controller/cliente_controller.h"
 #include "util/log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,11 +11,11 @@
 
 int main(int argc, char **argv) {
 
-    log_set_level(LOG_INFO);
+    log_set_level(LOG_DEBUG);
 
     db_init_pool(getenv(ENV_DB_CONNECTION_STR));
 
-    pessoa_controller_init();
+    cliente_controller_init();
 
     server_init(atoi(getenv(ENV_PORT)));
     

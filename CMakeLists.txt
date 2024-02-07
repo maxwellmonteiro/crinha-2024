@@ -9,8 +9,10 @@ find_package(jansson REQUIRED)
 add_executable(${PROJECT_NAME} 
   src/main.c 
   src/util/db_connection.c 
-  src/service/pessoa_service.c 
-  src/repository/pessoa_repository.c 
+  src/service/cliente_service.c
+  src/service/transacao_service.c 
+  src/repository/cliente_repository.c 
+  src/repository/transacao_repository.c 
   src/util/uuid_util.c
   src/util/string_util.c
   src/util/log.c
@@ -18,7 +20,7 @@ add_executable(${PROJECT_NAME}
   src/server/server.c
   src/server/http_parser.c
   src/server/router.c
-  src/controller/pessoa_controller.c
+  src/controller/cliente_controller.c
   )
 
 target_link_libraries(${PROJECT_NAME} PostgreSQL::PostgreSQL)

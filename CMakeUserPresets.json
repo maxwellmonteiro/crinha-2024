@@ -4,6 +4,7 @@
         "conan": {}
     },
     "include": [
-        "/home/maxwell/fontes/crinha/build/CMakePresets.json"
+        "/home/maxwell/fontes/crinha/build/CMakePresets.json",
+        "/home/maxwell/fontes/crinha-backend-q1/build/CMakePresets.json"
     ]
 }
