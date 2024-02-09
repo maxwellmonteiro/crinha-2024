@@ -16,6 +16,12 @@ TransacaoList transacao_repo_find_last_10(uint32_t id_cliente) {
 
     int ret = asprintf(&query, "select id, id_cliente, valor, tipo, descricao, to_char(realizada_em, 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') from transacao "
         "where id_cliente = %d order by realizada_em desc limit 10", id_cliente);
+
+    if (ret < 0) {
+        log_error("Falha ao montar comando SQL");
+        return transacoes;
+    }
+
     DBResultSet *result_set = db_query(db_get_connection(), query);
     free(query);
 
@@ -45,12 +51,17 @@ bool transacao_repo_insert(Transacao *transacao) {
     char operacao = transacao->tipo[0] == 'c' ? '+' : '-';
 
     int ret = asprintf(&query,
-        "insert into transacao(id, id_cliente, valor, tipo, descricao) values('%s', %d, %ld, '%s', '%s');"
         "select * from cliente where id = %d for update;"
+        "insert into transacao(id, id_cliente, valor, tipo, descricao) values('%s', %d, %ld, '%s', '%s');"
         "update cliente set saldo = saldo %c %ld where id = %d;",
-        transacao->id, transacao->id_cliente, transacao->valor, transacao->tipo, transacao->descricao,
         transacao->id_cliente,
+        transacao->id, transacao->id_cliente, transacao->valor, transacao->tipo, transacao->descricao,        
         operacao, transacao->valor, transacao->id_cliente);
+
+    if (ret < 0) {
+        log_error("Falha ao montar comando SQL");
+        return false;
+    }
 
     bool status = db_execute(db_get_connection(), query);
     free(query);

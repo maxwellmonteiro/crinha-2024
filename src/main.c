@@ -12,7 +12,7 @@
 
 int main(int argc, char **argv) {
 
-    log_set_level(LOG_INFO);
+    log_set_level(LOG_DEBUG);
 
     db_init_pool(env_util_get(ENV_DB_CONNECTION_STR));
 

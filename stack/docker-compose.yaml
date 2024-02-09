@@ -4,6 +4,7 @@ services:
   api01: &api
     image: crinha:latest
     hostname: api01  
+    command: ./rinha
     environment:
       PORT: 8080
       DB_CONNECTION_STR: "user=rinha password=rinha dbname=rinha host=db port=5432"
@@ -15,8 +16,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.15'
-          memory: '0.1GB'
+          cpus: '0.20'
+          memory: '6MB'
 
   api02:
     <<: *api
@@ -35,12 +36,14 @@ services:
       - POSTGRES_DB=rinha
     expose:
       - 5432
+    ports:
+      - "5433:5432"
     #network_mode: "host"
     deploy:
       resources:
         limits:
           cpus: '1.00'
-          memory: '2.3GB' 
+          memory: '440MB' 
          
   nginx:
     image: nginx:latest
@@ -55,5 +58,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.20'
-          memory: '0.5GB'
+          cpus: '0.10'
+          memory: '98MB'

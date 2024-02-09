@@ -83,7 +83,6 @@ DBResultSet *db_query(PGconn *conn, char *query) {
 
 bool db_execute(PGconn *conn, char *query) {
     bool ret = true;
-    DBResultSet *result_set = NULL;
     PGresult *res = PQexec(conn, query);
         
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
