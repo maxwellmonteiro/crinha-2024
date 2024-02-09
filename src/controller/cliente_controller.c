@@ -10,25 +10,24 @@
 #include <inttypes.h>
 #include <ctype.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include <jansson.h>
 #include "../util/log.h"
 
 #define MAX_BUFFER_URL_PARAM 128
-#define MAX_BUFFER_FIND_BY_ID 1024
-#define MAX_BUFFER_TRANSACAO_SAVE 512
+#define MAX_BUFFER_FIND_BY_ID 2048
+#define MAX_BUFFER_TRANSACAO_SAVE 256
+#define MAX_BUFFER_DATE_TIME_ISO_STR 64
 
 #define MATCH_ONE_URL_PARAM(STR, STR2) ("^\\"STR"\\/([a-zA-Z0-9\\-]*)\\"STR2"$")
 #define EXTRACT_ONE_URL_PARAM "\\/([0-9]*)\\/"
 
-static regex_t matcher_save;
-static regex_t matcher_find_by_id;
-static regex_t matcher_find_by_termo;
-static regex_t matcher_count;
-
 static Route route_find_by_id = { HTTP_GET, MATCH_ONE_URL_PARAM("/clientes", "/extrato"), cliente_controller_find_by_id, NULL };
 static Route route_transacao_save = { HTTP_POST, MATCH_ONE_URL_PARAM("/clientes", "/transacoes"), NULL, cliente_controller_save_transacao };
 
+static char buffer_date_time_iso_str[MAX_BUFFER_DATE_TIME_ISO_STR];
 static char buffer_url_param[MAX_BUFFER_URL_PARAM];
 static char buffer_response_find_by_id[MAX_BUFFER_FIND_BY_ID];
 static char buffer_response_trasacao_save[MAX_BUFFER_TRANSACAO_SAVE];
@@ -40,11 +39,13 @@ json_t *build_json_saldo_data(Cliente *cliente);
 json_t *build_json_transacoes(TransacaoList transacoes);
 json_t *build_json_transacao(Transacao *transacao);
 json_t *build_json_extrato(json_t *json_saldo, json_t *json_transacoes);
+void update_saldo_cliente(Cliente *cliente, Transacao *transacao) ;
+void get_current_time_as_iso_str(char *buffer);
 
 bool is_id_cliente_valido(const char *id);
 bool is_descricao_transacao_valida(const char *descricao);
 bool is_tipo_transacao_valido(const char *tipo);
-bool is_valor_transacao_valido(const char *valor);
+bool is_valor_transacao_valido(long long valor);
 bool digits_only(const char *s);
 
 void cliente_controller_init() {  
@@ -79,32 +80,35 @@ char *cliente_controller_save_transacao(const char *url, const char *body) {
 
         if (is_descricao_transacao_valida(json_string_value(json_descricao)) && 
             is_tipo_transacao_valido(json_string_value(json_tipo)) &&
-            is_valor_transacao_valido(json_string_value(json_valor))
+            json_is_integer(json_valor) && is_valor_transacao_valido(json_integer_value(json_valor))
             ) {
 
             Transacao *transacao = malloc(sizeof(Transacao));
             transacao->id_cliente = id_cliente;
             transacao->valor = json_integer_value(json_valor);
-            transacao->tipo = json_string_value(json_tipo)[0];
+            strzcpy(transacao->tipo, json_string_value(json_tipo), TRANSACAO_TIPO_LEN);
             strzcpy(transacao->descricao, json_string_value(json_descricao), UTF8_TRANSACAO_DESCRICAO_LEN);
 
-            if (transacao_service_save(transacao)) {
-                Cliente *cliente = cliente_service_find_one(id_cliente);
-                if (cliente != NULL) {
+            Cliente *cliente = cliente_service_find_one(id_cliente);
+            if (cliente != NULL) {
+                if (transacao_service_save(transacao)) {
+                    update_saldo_cliente(cliente, transacao);
                     json_t *json_saldo = build_json_saldo(cliente);
                     char *buffer_saldo = json_dumps(json_saldo, 0);
                     sprintf(buffer_response_trasacao_save, response_save_transacao, transacao->id, strlen(buffer_saldo), buffer_saldo);
                     resp = buffer_response_trasacao_save;
                     json_decref(json_saldo);
                     free(buffer_saldo);
-                    free(cliente);
                 } else {
                     resp = HTTP_UNPROCESSABLE_ENTITY;
                 }
+                free(cliente);
             } else {
-                resp = HTTP_UNPROCESSABLE_ENTITY;
+                resp = HTTP_NOT_FOUND;
             }
             free(transacao);
+        } else {
+            resp = HTTP_UNPROCESSABLE_ENTITY;
         }
         json_decref(json_transacao);
     } else {
@@ -145,15 +149,19 @@ bool is_id_cliente_valido(const char *id) {
 }
 
 bool is_descricao_transacao_valida(const char *descricao) {
-    return string_util_utf8_strlen(descricao) <= TRANSACAO_DESCRICAO_LEN;
+    if (descricao != NULL) {
+        size_t len = string_util_utf8_strlen(descricao);
+        return len >= 1 && len <= TRANSACAO_DESCRICAO_LEN;
+    } 
+    return false;
 }
 
 bool is_tipo_transacao_valido(const char *tipo) {
     return tipo[0] == 'c' || tipo[0] == 'd';
 }
 
-bool is_valor_transacao_valido(const char *valor) {
-    return digits_only(valor) && atol(valor) > 0;
+bool is_valor_transacao_valido(long long valor) {
+    return valor > 0;
 }
 
 bool digits_only(const char *s) {
@@ -199,16 +207,17 @@ char *extract_url_param(const char *url) {
 }
 
 json_t *build_json_saldo(Cliente *cliente) {
-    return json_pack("{s:s?, s:s?}",        
+    return json_pack("{s:i, s:i}",        
         "limite", cliente->limite,
         "saldo", cliente->saldo
         );
 }
 
 json_t *build_json_saldo_data(Cliente *cliente) {
+    get_current_time_as_iso_str(buffer_date_time_iso_str);
     return json_pack("{s:i, s:s?, s:i}",
         "total", cliente->saldo,
-        "data_extrato", NULL,
+        "data_extrato", buffer_date_time_iso_str,
         "limite", cliente->limite
         );
 }
@@ -225,7 +234,7 @@ json_t *build_json_transacoes(TransacaoList transacoes) {
 }
 
 json_t *build_json_transacao(Transacao *transacao) {
-    return json_pack("{s:s?, s:s?, s:s?, s:s?}",
+    return json_pack("{s:i, s:s?, s:s?, s:s?}",
         "valor", transacao->valor,
         "tipo", transacao->tipo,
         "descricao", transacao->descricao,
@@ -240,4 +249,20 @@ json_t *build_json_extrato(json_t *json_saldo, json_t *json_transacoes) {
         );
 }
 
+void update_saldo_cliente(Cliente *cliente, Transacao *transacao) {
+    if (transacao->tipo[0] == 'c') {
+        cliente->saldo += transacao->valor;
+    } else {
+        cliente->saldo -= transacao->valor;
+    }
+}
 
+void get_current_time_as_iso_str(char *buffer) {
+    char tmp[MAX_BUFFER_DATE_TIME_ISO_STR];
+    struct timeval tval;
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    gettimeofday(&tval, NULL);
+    strftime(tmp, MAX_BUFFER_DATE_TIME_ISO_STR, "%FT%T.%%06ldZ", tm);
+    sprintf(buffer, tmp, tval.tv_usec);
+}

@@ -4,7 +4,9 @@ drop table cliente;
 create table cliente (
     id integer constraint pk_cliente primary key,
     limite bigint not null,
-    saldo bigint not null
+    saldo bigint not null,
+
+    constraint chk_saldo CHECK(saldo >= (-limite))
 );
 
 create table transacao (
@@ -15,6 +17,10 @@ create table transacao (
     descricao character varying (10) not null,
     realizada_em timestamp not null default current_timestamp
 );
+
+--create index CONCURRENTLY idx_transacao_id_cliente ON transacao (id_cliente);
+--create index CONCURRENTLY idx_transacao_realizada_em ON transacao (realizada_em DESC);
+
 
 insert into cliente(id, limite, saldo) values(1, 100000, 0);
 insert into cliente(id, limite, saldo) values(2, 80000, 0);

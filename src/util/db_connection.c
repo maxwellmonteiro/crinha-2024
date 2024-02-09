@@ -23,8 +23,13 @@ void db_add_to_pool(PGconn *conn) {
 }
 
 void db_init_pool(char *connet_str) {
-    PGconn *conn = db_connect(connet_str);
-    db_add_to_pool(conn);
+    if (connet_str != NULL) {
+        PGconn *conn = db_connect(connet_str);
+        db_add_to_pool(conn);
+    } else {
+        log_fatal("string de conexão inválida");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void db_close_pool() {

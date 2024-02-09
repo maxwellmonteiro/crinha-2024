@@ -34,3 +34,4 @@ extern void db_clear_result_set(DBResultSet *result_set);
 void db_init_pool(char *connet_str);
 
 PGconn *db_get_connection();
+

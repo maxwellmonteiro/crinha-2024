@@ -1,0 +1,1 @@
+extern char *env_util_get(const char* name);

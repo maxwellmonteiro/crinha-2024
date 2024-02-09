@@ -17,6 +17,7 @@ add_executable(${PROJECT_NAME}
   src/util/string_util.c
   src/util/log.c
   src/util/array_list.c
+  src/util/env_util.c
   src/server/server.c
   src/server/http_parser.c
   src/server/router.c
