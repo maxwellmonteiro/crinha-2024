@@ -54,19 +54,11 @@ void cliente_controller_init() {
     router_add_route(&route_transacao_save);
 }
 
-char response_save_transacao[] = "HTTP/1.1 200 OK""\r\n"
-                                "Location: /clientes/%d/transacoes/""\r\n"                            
+char template_response_http_200_json[] = "HTTP/1.1 200 OK""\r\n"
+                                "Content-Type: application/json; charset=utf-8""\r\n"                            
                                 "Content-Length: %d""\r\n"
                                 "\r\n"
                                 "%s";
-
-
-char response_find_by_id[] = "HTTP/1.1 200 OK""\r\n"                                  
-                                "Content-Type: application/json; charset=utf-8""\r\n"
-                                "Content-Length: %d""\r\n"
-                                "\r\n"
-                                "%s";                            
-                            
 
 char *cliente_controller_save_transacao(const char *url, const char *body) {
     char *resp = HTTP_BAD_REQUEST;
@@ -100,19 +92,15 @@ char *cliente_controller_save_transacao(const char *url, const char *body) {
 
         Cliente *cliente = cliente_service_find_one(id_cliente);
         if (cliente != NULL) {
-            if (!is_limite_excedido(cliente, transacao)) {
-                Cliente *cliente_atualizado = transacao_service_save(transacao);
-                if (cliente_atualizado != NULL) {
-                    json_t *json_saldo = build_json_saldo(cliente_atualizado);
-                    char *buffer_saldo = json_dumps(json_saldo, 0);
-                    sprintf(buffer_response_trasacao_save, response_save_transacao, id_cliente, strlen(buffer_saldo), buffer_saldo);
-                    resp = buffer_response_trasacao_save;
-                    json_decref(json_saldo);
-                    free(buffer_saldo);
-                    free(cliente_atualizado);
-                } else {
-                    resp = HTTP_UNPROCESSABLE_ENTITY;
-                }
+            Cliente *cliente_atualizado = transacao_service_save(transacao);
+            if (cliente_atualizado != NULL) {
+                json_t *json_saldo = build_json_saldo(cliente_atualizado);
+                char *buffer_saldo = json_dumps(json_saldo, 0);
+                sprintf(buffer_response_trasacao_save, template_response_http_200_json, strlen(buffer_saldo), buffer_saldo);
+                resp = buffer_response_trasacao_save;
+                json_decref(json_saldo);
+                free(buffer_saldo);
+                free(cliente_atualizado);
             } else {
                 resp = HTTP_UNPROCESSABLE_ENTITY;
             }
@@ -141,7 +129,7 @@ char *cliente_controller_find_by_id(const char *url) {
             json_t *json_transacoes = build_json_transacoes(transacoes);
             json_t *json_extrato = build_json_extrato(json_saldo, json_transacoes);
             char *buffer_extrato = json_dumps(json_extrato, 0);
-            sprintf(buffer_response_find_by_id, response_find_by_id, strlen(buffer_extrato), buffer_extrato);
+            sprintf(buffer_response_find_by_id, template_response_http_200_json, strlen(buffer_extrato), buffer_extrato);
             free(buffer_extrato);
             json_decref(json_extrato);
             transacao_service_free_list(transacoes);
@@ -169,7 +157,7 @@ bool is_descricao_transacao_valida(const char *descricao) {
 }
 
 bool is_tipo_transacao_valido(const char *tipo) {
-    return tipo[0] == 'c' || tipo[0] == 'd';
+    return strlen(tipo) == 1 && (tipo[0] == 'c' || tipo[0] == 'd');
 }
 
 bool is_valor_transacao_valido(long long valor) {

@@ -7,12 +7,12 @@ services:
     command: ./rinha
     environment:
       PORT: 8080
-      DB_CONNECTION_STR: "user=rinha password=rinha dbname=rinha host=db port=5432"
+      DB_CONNECTION_STR: "user=rinha password=rinha dbname=rinha host=localhost port=5432"
     depends_on: 
       - db
     expose:
       - 8080
-    # network_mode: "host"    
+    network_mode: "host"    
     deploy:
       resources:
         limits:
@@ -36,9 +36,9 @@ services:
       - POSTGRES_DB=rinha
     expose:
       - 5432
-    ports:
-      - "5433:5432"
-    # network_mode: "host"    
+    # ports:
+    #   - "5433:5432"
+    network_mode: "host"    
     deploy:
       resources:
         limits:
@@ -52,9 +52,9 @@ services:
     depends_on:
       - api01
       - api02  
-    ports:
-      - "9999:9999"
-    # network_mode: "host"    
+    # ports:
+    #   - "9999:9999"
+    network_mode: "host"    
     deploy:
       resources:
         limits:
