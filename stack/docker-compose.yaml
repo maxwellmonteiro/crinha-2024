@@ -12,7 +12,7 @@ services:
       - db
     expose:
       - 8080
-    #network_mode: "host"
+    # network_mode: "host"    
     deploy:
       resources:
         limits:
@@ -21,14 +21,14 @@ services:
 
   api02:
     <<: *api
-    hostname: api02      
-
+    hostname: api02
+  
   db:
     image: postgres:15
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./postgresql.conf:/docker-entrypoint-initdb.d/postgresql.conf
-    command: postgres -c config_file=/docker-entrypoint-initdb.d/postgresql.conf    
+    command: postgres -c config_file=/docker-entrypoint-initdb.d/postgresql.conf
     hostname: db
     environment:
       - POSTGRES_USER=rinha
@@ -38,15 +38,15 @@ services:
       - 5432
     ports:
       - "5433:5432"
-    #network_mode: "host"
+    # network_mode: "host"    
     deploy:
       resources:
         limits:
-          cpus: '1.00'
-          memory: '440MB' 
+          cpus: '0.90'
+          memory: '448MB' 
          
   nginx:
-    image: nginx:latest
+    image: nginx:1.25.3
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -54,9 +54,9 @@ services:
       - api02  
     ports:
       - "9999:9999"
-    #network_mode: "host"
+    # network_mode: "host"    
     deploy:
       resources:
         limits:
-          cpus: '0.10'
-          memory: '98MB'
+          cpus: '0.20'
+          memory: '90MB'

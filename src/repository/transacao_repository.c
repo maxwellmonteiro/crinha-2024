@@ -29,7 +29,7 @@ TransacaoList transacao_repo_find_last_10(uint32_t id_cliente) {
         transacoes.values = malloc(sizeof(Transacao) * result_set->rows_count);
         transacoes.size = result_set->rows_count;
         for (int i = 0; i < result_set->rows_count; i++) {
-            strzcpy(transacoes.values[i].id, result_set->records[i].fields_value[0], TRANSACAO_ID_LEN);
+            transacoes.values[i].id = atoi(result_set->records[i].fields_value[0]);
             transacoes.values[i].id_cliente = atoi(result_set->records[i].fields_value[1]);
             transacoes.values[i].valor = atol(result_set->records[i].fields_value[2]);
             strzcpy(transacoes.values[i].tipo, result_set->records[i].fields_value[3], TRANSACAO_TIPO_LEN);
@@ -40,37 +40,50 @@ TransacaoList transacao_repo_find_last_10(uint32_t id_cliente) {
         transacoes.size = 0;
         transacoes.values = NULL;
     }
-    db_clear_result_set(result_set);
+    if (result_set != NULL) {
+        db_clear_result_set(result_set);
+    }
 
     return transacoes;
 }
 
-bool transacao_repo_insert(Transacao *transacao) {
+Cliente *transacao_repo_insert(Transacao *transacao) {
     char *query;
 
     char operacao = transacao->tipo[0] == 'c' ? '+' : '-';
 
     int ret = asprintf(&query,
-        "select * from cliente where id = %d for update;"
-        "insert into transacao(id, id_cliente, valor, tipo, descricao) values('%s', %d, %ld, '%s', '%s');"
-        "update cliente set saldo = saldo %c %ld where id = %d;",
-        transacao->id_cliente,
-        transacao->id, transacao->id_cliente, transacao->valor, transacao->tipo, transacao->descricao,        
-        operacao, transacao->valor, transacao->id_cliente);
+        // "select * from cliente where id = %d for update;" // pesimistic lock
+        "update cliente set saldo = saldo %c %ld where id = %d;"
+        "insert into transacao(id_cliente, valor, tipo, descricao) values(%d, %ld, '%s', '%s');"
+        "select * from cliente where id = %d;",
+        // transacao->id_cliente,
+        operacao, transacao->valor, transacao->id_cliente,
+        transacao->id_cliente, transacao->valor, transacao->tipo, transacao->descricao,        
+        transacao->id_cliente);
 
     if (ret < 0) {
         log_error("Falha ao montar comando SQL");
         return false;
     }
 
-    bool status = db_execute(db_get_connection(), query);
+    DBResultSet *result_set = db_query(db_get_connection(), query);
     free(query);
 
-    if (!status) {
-       strcpy(transacao->id, "");
-       return false;
+    Cliente *cliente = NULL;
+    if (result_set != NULL && result_set->rows_count > 0) {
+        cliente = malloc(sizeof(Cliente));
+        if (result_set->rows_count > 0) {
+            cliente->id = atoi(result_set->records[0].fields_value[0]);
+            cliente->limite = atol(result_set->records[0].fields_value[1]);
+            cliente->saldo = atol(result_set->records[0].fields_value[2]);
+        }
     }
-    return true;
+    if (result_set != NULL) {
+        db_clear_result_set(result_set);
+    }
+
+    return cliente;
 }
 
 void transacao_repo_free_list(TransacaoList transacoes) {

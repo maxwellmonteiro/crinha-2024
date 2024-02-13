@@ -10,7 +10,7 @@ create table cliente (
 );
 
 create table transacao (
-    id uuid constraint pk_transacao primary key,
+    id serial constraint pk_transacao primary key,
     id_cliente integer references cliente(id),
     valor integer not null,
     tipo char not null,
@@ -33,5 +33,3 @@ cliente c,
 (select sum(valor) as credito from transacao where tipo = 'c' and id_cliente = 1) r, 
 (select sum(valor) as debito from transacao where tipo = 'd' and id_cliente = 1) s
 where c.id = 1;
-
-

@@ -10,8 +10,7 @@ TransacaoList transacao_service_find_last_10(uint32_t cliente_id) {
     return transacao_repo_find_last_10(cliente_id);
 }
 
-bool transacao_service_save(Transacao *transacao) {
-    uuid_util_generate_random(transacao->id);
+Cliente *transacao_service_save(Transacao *transacao) {
     return transacao_repo_insert(transacao);
 }
 
