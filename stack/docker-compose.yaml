@@ -7,7 +7,7 @@ services:
     command: ./rinha
     environment:
       PORT: 8080
-      DB_CONNECTION_STR: "user=rinha password=rinha dbname=rinha host=localhost port=5432"
+      DB_CONNECTION_STR: "user=rinha password=rinha dbname=rinha host=localhost port=5433"
     depends_on: 
       - db
     expose:
@@ -22,6 +22,11 @@ services:
   api02:
     <<: *api
     hostname: api02
+    environment:
+      PORT: 8081
+      DB_CONNECTION_STR: "user=rinha password=rinha dbname=rinha host=localhost port=5433"
+    expose:
+      - 8081
   
   db:
     image: postgres:15
@@ -35,15 +40,15 @@ services:
       - POSTGRES_PASSWORD=rinha
       - POSTGRES_DB=rinha
     expose:
-      - 5432
+      - 5433
     # ports:
-    #   - "5433:5432"
+    #   - "5433:5433"
     network_mode: "host"    
     deploy:
       resources:
         limits:
-          cpus: '0.90'
-          memory: '128MB' 
+          cpus: '0.75'
+          memory: '96MB' 
          
   nginx:
     image: nginx:1.25.3
@@ -58,5 +63,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.20'
-          memory: '32MB'
+          cpus: '0.35'
+          memory: '16MB'

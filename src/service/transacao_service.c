@@ -14,6 +14,10 @@ Cliente *transacao_service_save(Transacao *transacao) {
     return transacao_repo_insert(transacao);
 }
 
+bool transacao_service_save_async(Transacao *transacao) {
+    return transacao_repo_insert_async(transacao);
+}
+
 void transacao_service_free_list(TransacaoList transacoes) {
     transacao_repo_free_list(transacoes);
 }

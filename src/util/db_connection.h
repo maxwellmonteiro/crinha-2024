@@ -29,6 +29,8 @@ extern DBResultSet *db_query(PGconn *conn, char *query);
 
 extern bool db_execute(PGconn *conn, char *query);
 
+extern bool db_execute_async(PGconn *conn, char *query);
+
 extern void db_clear_result_set(DBResultSet *result_set);
 
 void db_init_pool(char *connet_str);

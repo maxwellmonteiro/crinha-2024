@@ -4,6 +4,8 @@
 #include "../server/router.h"
 #include "../server/router.h"
 #include "../util/string_util.h"
+#include "../util/log.h"
+#include "../util/env_util.h"
 #include <stdio.h>
 #include <regex.h>
 #include <string.h>
@@ -12,9 +14,8 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/time.h>
-
 #include <jansson.h>
-#include "../util/log.h"
+
 
 #define MAX_BUFFER_URL_PARAM 128
 #define MAX_BUFFER_FIND_BY_ID 2048
@@ -92,15 +93,22 @@ char *cliente_controller_save_transacao(const char *url, const char *body) {
 
         Cliente *cliente = cliente_service_find_one(id_cliente);
         if (cliente != NULL) {
-            Cliente *cliente_atualizado = transacao_service_save(transacao);
-            if (cliente_atualizado != NULL) {
-                json_t *json_saldo = build_json_saldo(cliente_atualizado);
-                char *buffer_saldo = json_dumps(json_saldo, 0);
-                sprintf(buffer_response_trasacao_save, template_response_http_200_json, strlen(buffer_saldo), buffer_saldo);
-                resp = buffer_response_trasacao_save;
-                json_decref(json_saldo);
-                free(buffer_saldo);
-                free(cliente_atualizado);
+            if (!is_limite_excedido(cliente, transacao)) {
+                // Cliente *cliente_atualizado = transacao_service_save(transacao);
+                bool ret = transacao_service_save_async(transacao);
+                // if (cliente_atualizado != NULL) {
+                if (ret) {         
+                    update_saldo_cliente(cliente, transacao);
+                    // json_t *json_saldo = build_json_saldo(cliente_atualizado);
+                    json_t *json_saldo = build_json_saldo(cliente);
+                    char *buffer_saldo = json_dumps(json_saldo, JSON_COMPACT);
+                    sprintf(buffer_response_trasacao_save, template_response_http_200_json, strlen(buffer_saldo), buffer_saldo);
+                    resp = buffer_response_trasacao_save;
+                    json_decref(json_saldo);
+                    free(buffer_saldo);
+                } else {
+                    resp = HTTP_UNPROCESSABLE_ENTITY;
+                }
             } else {
                 resp = HTTP_UNPROCESSABLE_ENTITY;
             }
@@ -113,11 +121,12 @@ char *cliente_controller_save_transacao(const char *url, const char *body) {
         resp = HTTP_UNPROCESSABLE_ENTITY;
     }
     json_decref(json_transacao);
-    
     return resp;
 }
 
 char *cliente_controller_find_by_id(const char *url) {
+    char *resp = HTTP_BAD_REQUEST;
+
     char *param = extract_url_param(url);
 
     if (is_id_cliente_valido(param)) {
@@ -128,18 +137,18 @@ char *cliente_controller_find_by_id(const char *url) {
             json_t *json_saldo = build_json_saldo_data(cliente);
             json_t *json_transacoes = build_json_transacoes(transacoes);
             json_t *json_extrato = build_json_extrato(json_saldo, json_transacoes);
-            char *buffer_extrato = json_dumps(json_extrato, 0);
+            char *buffer_extrato = json_dumps(json_extrato, JSON_COMPACT);
             sprintf(buffer_response_find_by_id, template_response_http_200_json, strlen(buffer_extrato), buffer_extrato);
             free(buffer_extrato);
             json_decref(json_extrato);
             transacao_service_free_list(transacoes);
             free(cliente);
-            return buffer_response_find_by_id;
+            resp = buffer_response_find_by_id;
         } else {
-            return HTTP_NOT_FOUND;
+            resp = HTTP_NOT_FOUND;
         }
     }
-    return HTTP_BAD_REQUEST;
+    return resp;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////

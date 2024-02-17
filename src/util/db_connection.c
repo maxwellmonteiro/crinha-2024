@@ -1,10 +1,11 @@
 #include "db_connection.h"
 #include "../util/log.h"
+#include "../util/env_util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <inttypes.h>
 
 static PGconn *pool = NULL;
 
@@ -54,8 +55,6 @@ PGconn *db_connect(char *connet_str) {
         sleep(1);      
         log_warn("Tentando nova conexão ...");  
         conn = PQconnectdb(connet_str);
-        // PQfinish(conn);
-        // exit(EXIT_FAILURE);
     }
     log_info("Conectado ao banco de dados");
     return conn;
@@ -67,6 +66,7 @@ void db_disconnect(PGconn * conn) {
 
 DBResultSet *db_query(PGconn *conn, char *query) {
     DBResultSet *result_set = NULL;
+
     PGresult *res = PQexec(conn, query);
 
     int status = PQresultStatus(res);
@@ -91,6 +91,19 @@ bool db_execute(PGconn *conn, char *query) {
     }  
     PQclear(res);
     return ret; 
+}
+
+bool db_execute_async(PGconn *conn, char *query) {
+    PGresult *res;
+
+    while ((res = PQgetResult(conn)) != NULL) {
+        PQclear(res);
+    }
+    if (!PQsendQuery(conn, query)) {
+        log_debug("Falha ao executar comando (%s)", PQerrorMessage(conn));
+        return false;
+    }  
+    return true; 
 }
 
 DBResultSet *db_create_result_set(PGresult *res, int rows, int fields) {

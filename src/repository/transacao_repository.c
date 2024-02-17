@@ -53,11 +53,9 @@ Cliente *transacao_repo_insert(Transacao *transacao) {
     char operacao = transacao->tipo[0] == 'c' ? '+' : '-';
 
     int ret = asprintf(&query,
-        // "select * from cliente where id = %d for update;" // pesimistic lock
         "update cliente set saldo = saldo %c %ld where id = %d;"
         "insert into transacao(id_cliente, valor, tipo, descricao) values(%d, %ld, '%s', '%s');"
         "select * from cliente where id = %d;",
-        // transacao->id_cliente,
         operacao, transacao->valor, transacao->id_cliente,
         transacao->id_cliente, transacao->valor, transacao->tipo, transacao->descricao,        
         transacao->id_cliente);
@@ -84,6 +82,29 @@ Cliente *transacao_repo_insert(Transacao *transacao) {
     }
 
     return cliente;
+}
+
+bool transacao_repo_insert_async(Transacao *transacao) {
+    char *query;
+
+    char operacao = transacao->tipo[0] == 'c' ? '+' : '-';
+
+    int ret = asprintf(&query,
+        "update cliente set saldo = saldo %c %ld where id = %d;"
+        "insert into transacao(id_cliente, valor, tipo, descricao) values(%d, %ld, '%s', '%s');",
+        operacao, transacao->valor, transacao->id_cliente,
+        transacao->id_cliente, transacao->valor, transacao->tipo, transacao->descricao     
+        );
+
+    if (ret < 0) {
+        log_error("Falha ao montar comando SQL");
+        return false;
+    }
+
+    bool res = db_execute_async(db_get_connection(), query);
+    free(query);
+
+    return res;
 }
 
 void transacao_repo_free_list(TransacaoList transacoes) {
