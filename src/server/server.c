@@ -2,9 +2,7 @@
 #include "http_parser.h"
 #include "router.h"
 #include "../util/log.h"
-#include "../util/array_list.h"
 #include <stdlib.h>
-#include <stdbool.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -12,14 +10,14 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <unistd.h>
-#include <pthread.h>
+#include <poll.h>
 
 
 #define SOCKET_MAX_READ_BUFFER 1024
-#define SOCKET_MAX_QUEUED_CONN 100
-#define SOCKET_MAX_READ_RETRIES 3
-#define SOCKET_MAX_READ_WAIT 1000
+#define SOCKET_MAX_CONN 48
+#define SOCKET_MAX_QUEUED 128
+
+#define IS_SERVER_SCK(I) (I == 0)
 
 int socket_create() {
     int opt = 1;
@@ -42,43 +40,109 @@ void socket_listen(int sock_handle, struct sockaddr_in *address) {
         shutdown(sock_handle, SHUT_RDWR);
         exit(EXIT_FAILURE);
     }
-    if (listen(sock_handle, SOCKET_MAX_QUEUED_CONN) < 0) {
+    if (listen(sock_handle, SOCKET_MAX_QUEUED) < 0) {
         log_fatal("Falha ao fazer listen (%s)", strerror(errno));
         shutdown(sock_handle, SHUT_RDWR);
         exit(EXIT_FAILURE);
     }
 }
 
+void poll_push(struct pollfd *pfds, int fd, nfds_t *nfds) {
+    int i;
+
+    if (*nfds >= SOCKET_MAX_CONN) {
+        log_error("Limite de sockets ativos atingido (%d)", SOCKET_MAX_CONN);
+        return;
+    }
+
+    for (i = 0; pfds[i].fd != -1 && i < SOCKET_MAX_CONN; i++);
+    if (i < SOCKET_MAX_CONN) {
+        pfds[i].fd = fd;
+        pfds[i].revents = 0;
+        (*nfds)++;
+    }
+}
+
+void poll_pop(struct pollfd *pfds, int fd, nfds_t *nfds) {
+    int i;
+    for (i = 0; pfds[i].fd != fd && i < SOCKET_MAX_CONN; i++);
+    if (i < SOCKET_MAX_CONN) {
+        pfds[i].fd = -1;
+        pfds[i].revents = 0;
+        (*nfds)--;
+    }
+}
+
+void poll_init(struct pollfd *pfds) {
+    for (int i = 0; i < SOCKET_MAX_CONN; i++) {
+        pfds[i].fd = -1;
+        pfds[i].events = POLLIN;
+    }
+}
+
+inline void socket_read(int sd, llhttp_t *parser) {
+    char buffer[SOCKET_MAX_READ_BUFFER] = { 0 };
+    int valread;
+    char *response;
+
+    while ((valread = recv(sd, buffer, SOCKET_MAX_READ_BUFFER, MSG_DONTWAIT)) > 0) {
+        buffer[valread] = 0;
+        if (http_parser_parse(parser, buffer, valread) && http_parser_request_is_complete(parser)) {
+            uint8_t method = parser->method;
+            char *url = ((HttpRequest *)parser->data)->url;
+            char *body = ((HttpRequest *)parser->data)->body;
+            response = router_route(method, url, body);
+            send(sd, response, strlen(response), 0);
+            http_parser_reset_request(parser);
+        } else {
+            log_error("Falha no parse do request http (%s)", buffer);
+        }
+    }
+}
+
 void socket_loop(int sock_handle, struct sockaddr_in *address, llhttp_t *parser) {
     int new_socket;
     int addrlen = sizeof(*address);
-    char buffer[SOCKET_MAX_READ_BUFFER] = { 0 };
+
+    struct pollfd pfds[SOCKET_MAX_CONN];
+    int poll_ready;
+
+    nfds_t nfds = 0;
+    poll_init(pfds);
+    poll_push(pfds, sock_handle, &nfds);
 
     while (true) {
-        if ((new_socket = accept(sock_handle, (struct sockaddr *) address, (socklen_t *) &addrlen)) >= 0) {
-            int valread;
-            char* response;
+        poll_ready = poll(pfds, SOCKET_MAX_CONN, -1);
 
-            valread = recv(new_socket, buffer, SOCKET_MAX_READ_BUFFER, 0);
-            while (valread > 0) {
-                buffer[valread] = 0;
-                if (http_parser_parse(parser, buffer, valread) && http_parser_request_is_complete(parser)) {
-                    uint8_t method = parser->method;
-                    char *url = ((HttpRequest *) parser->data)->url;
-                    char *body = ((HttpRequest *) parser->data)->body;  
-                    response = router_route(method, url, body);
-                    send(new_socket, response, strlen(response), 0);
-                    http_parser_reset_request(parser);
-                } else {
-                    log_error("Falha no parse do request http (%s)", buffer);
-                }
-                valread = recv(new_socket, buffer, SOCKET_MAX_READ_BUFFER, MSG_DONTWAIT);
+        if (poll_ready <= 0) { 
+            log_error("Falha ao fazer poll (%s)", strerror(errno));
+            continue;
+        }
+
+        for (int i = 0; i < SOCKET_MAX_CONN; i++) {
+            if (pfds[i].revents == 0) {
+                continue;
             }
-            shutdown(new_socket, SHUT_RDWR);
-            close(new_socket);
-        } else {
-            log_error("Falha ao fazer accept (%s)", strerror(errno));
-            sleep(1);
+            if (pfds[i].revents & POLLIN) {
+                if (IS_SERVER_SCK(i)) {
+                    if ((new_socket = accept(sock_handle, (struct sockaddr *) address, (socklen_t *) &addrlen)) >= 0) {
+                        poll_push(pfds, new_socket, &nfds);
+                    } else {
+                        log_error("Falha ao fazer accept (%s)", strerror(errno));
+                    }
+                } else {
+                    socket_read(pfds[i].fd, parser);
+                    shutdown(pfds[i].fd, SHUT_RDWR);
+                    close(pfds[i].fd);
+                    poll_pop(pfds, pfds[i].fd, &nfds);
+                }
+            } else {
+                if (!IS_SERVER_SCK(i)) {
+                    shutdown(pfds[i].fd, SHUT_RDWR);
+                    close(pfds[i].fd);
+                    poll_pop(pfds, pfds[i].fd, &nfds);
+                } 
+            }
         }
     }
 }

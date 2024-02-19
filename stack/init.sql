@@ -1,7 +1,4 @@
-drop table if exists transacao;
-drop table if exists cliente;
-
-create table cliente (
+create table if not exists cliente (
     id integer constraint pk_cliente primary key,
     limite bigint not null,
     saldo bigint not null,
@@ -9,7 +6,7 @@ create table cliente (
     constraint chk_saldo CHECK(saldo >= (-limite))
 );
 
-create table transacao (
+create table if not exists transacao (
     id serial constraint pk_transacao primary key,
     id_cliente integer references cliente(id),
     valor integer not null,
