@@ -36,6 +36,7 @@ void db_init_pool(char *connet_str) {
 void db_close_pool() {
     if (poll != NULL) {
         db_disconnect(poll);
+        log_info("Desconectado do banco de dados");
     }
 }
 

@@ -11,13 +11,23 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <poll.h>
+#include <signal.h>
+#include <unistd.h>
 
 
 #define SOCKET_MAX_READ_BUFFER 1024
-#define SOCKET_MAX_CONN 48
-#define SOCKET_MAX_QUEUED 128
+#define SOCKET_MAX_POLL 16
+#define SOCKET_MAX_QUEUED 96
 
 #define IS_SERVER_SCK(I) (I == 0)
+#define IS_POLL_FULL(S) (S >= SOCKET_MAX_POLL)
+
+volatile sig_atomic_t shoud_terminate = 0;
+
+void handle_signal(int signum) {
+   log_info("Encerrando servidor ...");
+   shoud_terminate = 1;
+}
 
 int socket_create() {
     int opt = 1;
@@ -50,13 +60,13 @@ void socket_listen(int sock_handle, struct sockaddr_in *address) {
 void poll_push(struct pollfd *pfds, int fd, nfds_t *nfds) {
     int i;
 
-    if (*nfds >= SOCKET_MAX_CONN) {
-        log_error("Limite de sockets ativos atingido (%d)", SOCKET_MAX_CONN);
+    if (*nfds >= SOCKET_MAX_POLL) {
+        log_error("Limite de sockets ativos atingido (%d)", SOCKET_MAX_POLL);
         return;
     }
 
-    for (i = 0; pfds[i].fd != -1 && i < SOCKET_MAX_CONN; i++);
-    if (i < SOCKET_MAX_CONN) {
+    for (i = 0; i < SOCKET_MAX_POLL && pfds[i].fd != -1; i++);
+    if (i < SOCKET_MAX_POLL) {
         pfds[i].fd = fd;
         pfds[i].revents = 0;
         (*nfds)++;
@@ -65,22 +75,21 @@ void poll_push(struct pollfd *pfds, int fd, nfds_t *nfds) {
 
 void poll_pop(struct pollfd *pfds, int fd, nfds_t *nfds) {
     int i;
-    for (i = 0; pfds[i].fd != fd && i < SOCKET_MAX_CONN; i++);
-    if (i < SOCKET_MAX_CONN) {
+    for (i = 0; i < SOCKET_MAX_POLL && pfds[i].fd != fd; i++);
+    if (i < SOCKET_MAX_POLL) {
         pfds[i].fd = -1;
-        pfds[i].revents = 0;
         (*nfds)--;
     }
 }
 
 void poll_init(struct pollfd *pfds) {
-    for (int i = 0; i < SOCKET_MAX_CONN; i++) {
+    for (int i = 0; i < SOCKET_MAX_POLL; i++) {
         pfds[i].fd = -1;
         pfds[i].events = POLLIN;
     }
 }
 
-inline void socket_read(int sd, llhttp_t *parser) {
+void socket_read(int sd, llhttp_t *parser) {
     char buffer[SOCKET_MAX_READ_BUFFER] = { 0 };
     int valread;
     char *response;
@@ -104,27 +113,28 @@ void socket_loop(int sock_handle, struct sockaddr_in *address, llhttp_t *parser)
     int new_socket;
     int addrlen = sizeof(*address);
 
-    struct pollfd pfds[SOCKET_MAX_CONN];
+    struct pollfd pfds[SOCKET_MAX_POLL];
     int poll_ready;
 
     nfds_t nfds = 0;
     poll_init(pfds);
     poll_push(pfds, sock_handle, &nfds);
 
-    while (true) {
-        poll_ready = poll(pfds, SOCKET_MAX_CONN, -1);
+    while (!shoud_terminate) {
+        poll_ready = poll(pfds, SOCKET_MAX_POLL, -1);
 
-        if (poll_ready <= 0) { 
-            log_error("Falha ao fazer poll (%s)", strerror(errno));
+        if (poll_ready <= 0) {
+            if (errno != EINTR) log_error("Falha ao fazer poll (%s)", strerror(errno));
             continue;
         }
 
-        for (int i = 0; i < SOCKET_MAX_CONN; i++) {
-            if (pfds[i].revents == 0) {
-                continue;
-            }
+        for (int i = 0; i < SOCKET_MAX_POLL; i++) {
+            if (pfds[i].revents == 0) continue;
+
             if (pfds[i].revents & POLLIN) {
                 if (IS_SERVER_SCK(i)) {
+                    if (IS_POLL_FULL(nfds)) continue;
+                    
                     if ((new_socket = accept(sock_handle, (struct sockaddr *) address, (socklen_t *) &addrlen)) >= 0) {
                         poll_push(pfds, new_socket, &nfds);
                     } else {
@@ -148,6 +158,9 @@ void socket_loop(int sock_handle, struct sockaddr_in *address, llhttp_t *parser)
 }
 
 void server_init(uint16_t port) {
+    signal(SIGTERM, handle_signal);
+    signal(SIGINT, handle_signal);
+
     log_info("Iniciando servidor ...");
     int sock_handle = socket_create();
 
