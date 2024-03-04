@@ -94,12 +94,9 @@ char *cliente_controller_save_transacao(const char *url, const char *body) {
         Cliente *cliente = cliente_service_find_one(id_cliente);
         if (cliente != NULL) {
             if (!is_limite_excedido(cliente, transacao)) {
-                // Cliente *cliente_atualizado = transacao_service_save(transacao);
                 bool ret = transacao_service_save_async(transacao);
-                // if (cliente_atualizado != NULL) {
                 if (ret) {         
                     update_saldo_cliente(cliente, transacao);
-                    // json_t *json_saldo = build_json_saldo(cliente_atualizado);
                     json_t *json_saldo = build_json_saldo(cliente);
                     char *buffer_saldo = json_dumps(json_saldo, JSON_COMPACT);
                     sprintf(buffer_response_trasacao_save, template_response_http_200_json, strlen(buffer_saldo), buffer_saldo);

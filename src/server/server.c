@@ -24,23 +24,26 @@
 
 volatile sig_atomic_t shoud_terminate = 0;
 
-void handle_signal(int signum) {
-   log_info("Encerrando servidor ...");
+void handle_signal(int signum) {   
    shoud_terminate = 1;
 }
 
+void server_set_sock_opt(int sock_handle, int opt_name, int *opt_val, socklen_t opt_len) {
+    if (setsockopt(sock_handle, SOL_SOCKET, opt_name, opt_val, opt_len)) {
+        log_fatal("Falha ao definir socket options (%s)", strerror(errno));
+        shutdown(sock_handle, SHUT_RDWR);
+        exit(EXIT_FAILURE);
+    }
+}
+
 int socket_create() {
-    int opt = 1;
     int sock_handle = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_handle < 0) {
         log_fatal("Falha ao criar o socket (%s)", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    if (setsockopt(sock_handle, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        log_fatal("Falha ao definir socket options (%s)", strerror(errno));
-        shutdown(sock_handle, SHUT_RDWR);
-        exit(EXIT_FAILURE);
-    }
+    server_set_sock_opt(sock_handle, SO_REUSEADDR, &(int){1}, sizeof(int));
+    server_set_sock_opt(sock_handle, SO_REUSEPORT, &(int){1}, sizeof(int));
     return sock_handle;
 }
 
@@ -175,11 +178,11 @@ void server_init(uint16_t port) {
 
     char ipv4[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &address.sin_addr, ipv4, INET_ADDRSTRLEN);
-    log_info("Servidor iniciado em %s:%d", ipv4, port);
 
+    log_info("Servidor iniciado em %s:%d", ipv4, port);
     socket_loop(sock_handle, &address, parser);
+    log_info("Servidor encerrado");
 
     http_parser_close(parser);
-
     shutdown(sock_handle, SHUT_RDWR);    
 }

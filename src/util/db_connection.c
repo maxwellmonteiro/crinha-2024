@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-static PGconn *poll = NULL;
+static PGconn *pool = NULL;
 
 int db_get_lib_version() {
     return PQlibVersion();
@@ -18,8 +18,8 @@ int db_get_server_version(PGconn *conn) {
 }
 
 void db_add_to_pool(PGconn *conn) {
-    if (poll == NULL && conn != NULL) {
-        poll = conn;
+    if (pool == NULL && conn != NULL) {
+        pool = conn;
     }
 }
 
@@ -34,19 +34,19 @@ void db_init_pool(char *connet_str) {
 }
 
 void db_close_pool() {
-    if (poll != NULL) {
-        db_disconnect(poll);
+    if (pool != NULL) {
+        db_disconnect(pool);
         log_info("Desconectado do banco de dados");
     }
 }
 
 PGconn *db_get_connection() {
-    int status = PQstatus(poll);
+    int status = PQstatus(pool);
     if (status != CONNECTION_OK) {
         log_warn("Redefinindo conexão...");
-        PQreset(poll);
+        PQreset(pool);
     }
-    return poll;
+    return pool;
 }
 
 PGconn *db_connect(char *connet_str) {
